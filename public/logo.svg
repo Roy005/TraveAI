@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f172a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1e293b;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="grad2" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#06b6d4;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect x="0" y="0" width="512" height="512" rx="128" ry="128" fill="url(#grad1)" />
+  
+  <!-- Stylized Plane / Arrow -->
+  <path d="M120 256 L392 120 L280 392 L240 290 L120 256 Z" fill="url(#grad2)" />
+  
+  <!-- Orbit / Path -->
+  <path d="M140 372 A 160 160 0 0 1 372 140" stroke="url(#grad2)" stroke-width="24" stroke-linecap="round" fill="none" opacity="0.6" />
+</svg>
