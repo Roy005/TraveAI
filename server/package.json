@@ -1,6 +1,7 @@
 {
     "name": "traveai-server",
     "version": "1.0.0",
+    "license": "AGPL-3.0",
     "description": "TraveAI Backend API with AI-powered trip generation",
     "type": "module",
     "main": "index.js",
