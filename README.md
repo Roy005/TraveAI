@@ -146,15 +146,16 @@ npm run build
 
 ## Contributing
 
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open Pull Request
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct, and the process for submitting pull requests to us.
+
+**Important**: We require all contributions to be signed off (DCO) to ensure the integrity of the project's licensing.
+```bash
+git commit -s -m "your commit message"
+```
 
 ## License
 
-MIT License - feel free to use for personal or commercial projects.
+This project is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)** - see the [LICENSE](LICENSE) file for details.
 
 ---
 
