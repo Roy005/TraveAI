@@ -6,7 +6,7 @@ A modern, full-stack travel planning application that uses AI to generate person
 
 ## Features
 
-- 🤖 **AI Trip Generation** - Powered by Google Gemini for personalized itineraries
+- 🤖 **AI Trip Generation** - Powered by OpenRouter (Mistral, Llama, Gemini) for personalized itineraries
 - 🗺️ **Interactive Explorer** - Map-based destination discovery with Leaflet
 - 🏨 **Hotel & Flight Search** - Find and compare accommodations and flights
 - 👤 **User Accounts** - Save trips, track history, manage preferences
@@ -26,7 +26,7 @@ A modern, full-stack travel planning application that uses AI to generate person
 - **Express.js** API server
 - **MongoDB** with Mongoose ODM
 - **JWT** authentication
-- **Google Gemini AI** for itinerary generation
+- **OpenRouter AI** / **Google Gemini AI** for itinerary generation
 
 ## Getting Started
 
@@ -34,7 +34,7 @@ A modern, full-stack travel planning application that uses AI to generate person
 
 - Node.js 18+ 
 - MongoDB Atlas account (free tier works)
-- Google Gemini API key
+- OpenRouter API key (free) OR Google Gemini API key
 
 ### 1. Clone and Install
 
@@ -56,6 +56,7 @@ Create `server/.env` file:
 PORT=3001
 MONGODB_URI=mongodb+srv://YOUR_USERNAME:YOUR_PASSWORD@cluster.mongodb.net/traveai
 JWT_SECRET=your_super_secret_jwt_key_here
+OPENROUTER_API_KEY=your_openrouter_api_key_here
 GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
@@ -66,8 +67,14 @@ GEMINI_API_KEY=your_gemini_api_key_here
    - Create free M0 cluster
    - Get connection string from "Connect" > "Connect your application"
 
-2. **Google Gemini**:
-   - Go to https://makersuite.google.com/app/apikey
+2. **OpenRouter (Recommended - Free)**:
+   - Go to https://openrouter.ai
+   - Sign up for free account
+   - Get API key from dashboard
+   - Provides access to multiple AI models (Mistral, Llama, Gemini)
+
+3. **Google Gemini (Alternative)**:
+   - Go to https://aistudio.google.com/apikey
    - Create new API key
 
 ### 3. Run Development Servers
