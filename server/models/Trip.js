@@ -16,7 +16,7 @@ const activitySchema = new mongoose.Schema({
     },
     category: {
         type: String,
-        enum: ['sightseeing', 'food', 'adventure', 'culture', 'relaxation', 'shopping', 'transport', 'other'],
+        enum: ['sightseeing', 'food', 'adventure', 'culture', 'relaxation', 'shopping', 'transport', 'nightlife', 'nature', 'entertainment', 'wellness', 'market', 'museum', 'landmark', 'beach', 'temple', 'historical', 'photography', 'dining', 'breakfast', 'lunch', 'dinner', 'cafe', 'bar', 'activity', 'tour', 'other'],
         default: 'other'
     }
 }, { _id: false });

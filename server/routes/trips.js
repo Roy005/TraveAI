@@ -30,6 +30,7 @@ router.post('/generate', protect, async (req, res) => {
         }
 
         // Generate itinerary using AI
+        console.log('🔄 Generating itinerary for:', destination);
         const aiResult = await generateTripItinerary({
             destination,
             startDate,
@@ -40,8 +41,30 @@ router.post('/generate', protect, async (req, res) => {
             accommodation
         });
 
+        console.log('📊 AI Result:', {
+            success: aiResult.success,
+            hasItinerary: !!aiResult.itinerary,
+            hasFallback: !!aiResult.fallback,
+            error: aiResult.error || 'none'
+        });
+
         // Get itinerary (either from AI or fallback)
-        const itinerary = aiResult.success ? aiResult.itinerary : aiResult.fallback;
+        let itinerary = aiResult.success ? aiResult.itinerary : aiResult.fallback;
+
+        // Sanitize categories to valid enum values
+        const validCategories = ['sightseeing', 'food', 'adventure', 'culture', 'relaxation', 'shopping', 'transport', 'nightlife', 'nature', 'entertainment', 'wellness', 'market', 'museum', 'landmark', 'beach', 'temple', 'historical', 'photography', 'dining', 'breakfast', 'lunch', 'dinner', 'cafe', 'bar', 'activity', 'tour', 'other'];
+
+        if (itinerary && itinerary.days) {
+            itinerary.days = itinerary.days.map(day => ({
+                ...day,
+                activities: (day.activities || []).map(activity => ({
+                    ...activity,
+                    category: validCategories.includes(activity.category?.toLowerCase())
+                        ? activity.category.toLowerCase()
+                        : 'other'
+                }))
+            }));
+        }
 
         // Save trip to database
         const trip = await Trip.create({
@@ -86,9 +109,11 @@ router.post('/generate', protect, async (req, res) => {
         });
     } catch (error) {
         console.error('Trip generation error:', error);
+        console.error('Error stack:', error.stack);
         res.status(500).json({
             error: 'Server error',
-            message: 'Failed to generate trip'
+            message: error.message || 'Failed to generate trip',
+            details: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
     }
 });
