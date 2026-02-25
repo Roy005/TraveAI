@@ -1,11 +1,96 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// Initialize Gemini on each call (ensures new API keys are picked up)
+// Safe Gemini client getter — returns null if API key is missing
 const getGenAI = () => {
-    if (process.env.GEMINI_API_KEY) {
-        return new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey || apiKey === 'your_gemini_api_key_here') {
+        return null;
     }
-    return null;
+    return new GoogleGenerativeAI(apiKey);
+};
+
+// ==========================================
+// OpenRouter API Fallback (Free Models)
+// ==========================================
+const OPENROUTER_FREE_MODELS = [
+    'meta-llama/llama-3.3-70b-instruct:free',
+    'mistralai/mistral-small-3.1-24b-instruct:free',
+    'google/gemma-3n-e2b-it:free',
+    'qwen/qwen3-4b:free',
+    'nousresearch/hermes-3-llama-3.1-405b:free',
+];
+
+const generateViaOpenRouter = async (prompt) => {
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey || apiKey === 'your_openrouter_api_key_here') {
+        return { success: false, error: 'OpenRouter API key not configured' };
+    }
+
+    for (const model of OPENROUTER_FREE_MODELS) {
+        try {
+            console.log(`🔄 Trying OpenRouter model: ${model}`);
+            const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`,
+                    'HTTP-Referer': 'https://traveai.app',
+                    'X-Title': 'TraveAI Trip Planner',
+                },
+                body: JSON.stringify({
+                    model: model,
+                    messages: [
+                        {
+                            role: 'system',
+                            content: 'You are an elite travel planner AI. You MUST respond with ONLY valid JSON. No markdown, no explanation, no extra text — just the JSON object.'
+                        },
+                        {
+                            role: 'user',
+                            content: prompt
+                        }
+                    ],
+                    temperature: 0.9,
+                    top_p: 0.95,
+                    max_tokens: 8192,
+                }),
+            });
+
+            if (!response.ok) {
+                console.warn(`⚠️ OpenRouter model ${model} returned ${response.status}`);
+                continue; // Try next model
+            }
+
+            const data = await response.json();
+            const text = data.choices?.[0]?.message?.content;
+
+            if (!text) {
+                console.warn(`⚠️ OpenRouter model ${model} returned empty response`);
+                continue;
+            }
+
+            // Extract JSON from response (handle markdown code blocks)
+            let jsonString = text;
+            if (text.includes('```json')) {
+                jsonString = text.split('```json')[1].split('```')[0];
+            } else if (text.includes('```')) {
+                jsonString = text.split('```')[1].split('```')[0];
+            }
+
+            const itinerary = JSON.parse(jsonString.trim());
+            console.log(`✅ OpenRouter model ${model} successfully generated itinerary`);
+
+            return {
+                success: true,
+                itinerary,
+                model: model,
+            };
+        } catch (err) {
+            console.warn(`⚠️ OpenRouter model ${model} failed: ${err.message}`);
+            continue; // Try next model
+        }
+    }
+
+    return { success: false, error: 'All OpenRouter free models failed' };
 };
 
 export const generateTripItinerary = async (tripDetails) => {
@@ -114,135 +199,70 @@ IMPORTANT:
 - Include free activities to balance the budget
 - For food activities, mention specific dishes to try`;
 
+    // ===== TIER 1: Try Gemini API =====
     try {
-        const openRouterKey = process.env.OPENROUTER_API_KEY;
-        const geminiKey = process.env.GEMINI_API_KEY;
-
-        console.log('🔑 OpenRouter Key:', openRouterKey ? `${openRouterKey.substring(0, 8)}...${openRouterKey.substring(openRouterKey.length - 4)}` : 'NOT SET');
-        console.log('🔑 Gemini Key:', geminiKey ? `${geminiKey.substring(0, 6)}...${geminiKey.substring(geminiKey.length - 4)}` : 'NOT SET');
-
-        // Try OpenRouter first if key is available
-        if (openRouterKey) {
-            console.log('🔄 Using OpenRouter API...');
-
-            // List of free models to try (in order of preference)
-            const models = [
-                'mistralai/mistral-small-3.1-24b-instruct:free',
-                'meta-llama/llama-3.2-3b-instruct:free',
-                'huggingfaceh4/zephyr-7b-beta:free'
-            ];
-
-            for (const modelName of models) {
-                try {
-                    console.log(`📡 Trying model: ${modelName}`);
-
-                    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${openRouterKey}`,
-                            'Content-Type': 'application/json',
-                            'HTTP-Referer': 'http://localhost:5173',
-                            'X-Title': 'TraveAI Travel Planner'
-                        },
-                        body: JSON.stringify({
-                            model: modelName,
-                            messages: [
-                                {
-                                    role: 'user',
-                                    content: prompt
-                                }
-                            ],
-                            temperature: 0.8,
-                            max_tokens: 8000
-                        })
-                    });
-
-                    console.log('📡 Response status:', response.status);
-
-                    if (!response.ok) {
-                        const errorText = await response.text();
-                        console.error(`❌ Model ${modelName} failed:`, response.status, errorText);
-                        continue; // Try next model
-                    }
-
-                    const data = await response.json();
-                    console.log('📦 Response received');
-
-                    const text = data.choices?.[0]?.message?.content || '';
-                    console.log('📝 Response text length:', text.length);
-
-                    if (!text || text.length < 100) {
-                        console.error('❌ Empty or too short response');
-                        continue;
-                    }
-
-                    // Extract JSON from response
-                    let jsonString = text;
-                    if (text.includes('```json')) {
-                        jsonString = text.split('```json')[1].split('```')[0];
-                    } else if (text.includes('```')) {
-                        jsonString = text.split('```')[1].split('```')[0];
-                    }
-
-                    // Parse JSON
-                    const itinerary = JSON.parse(jsonString.trim());
-                    console.log('✅ Successfully generated itinerary with', modelName);
-                    console.log('✅ Itinerary has', itinerary.days?.length || 0, 'days');
-
-                    return {
-                        success: true,
-                        itinerary
-                    };
-                } catch (modelError) {
-                    console.error(`❌ Error with model ${modelName}:`, modelError.message);
-                    continue; // Try next model
-                }
+        const ai = getGenAI();
+        if (!ai) {
+            throw new Error('Gemini API key not configured. Please add GEMINI_API_KEY in your .env file.');
+        }
+        const model = ai.getGenerativeModel({
+            model: 'gemini-3.1-pro-preview',
+            generationConfig: {
+                temperature: 0.9,
+                topP: 0.95,
+                maxOutputTokens: 8192,
             }
+        });
 
-            console.error('❌ All OpenRouter models failed');
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const text = response.text();
+
+        // Extract JSON from response (handle markdown code blocks)
+        let jsonString = text;
+        if (text.includes('```json')) {
+            jsonString = text.split('```json')[1].split('```')[0];
+        } else if (text.includes('```')) {
+            jsonString = text.split('```')[1].split('```')[0];
         }
 
-        // Fallback to Google AI SDK if OpenRouter fails or no key
-        if (geminiKey) {
-            console.log('🔄 Falling back to Google Gemini API...');
-            const ai = getGenAI();
-            if (ai) {
-                const model = ai.getGenerativeModel({
-                    model: 'gemini-1.5-flash',
-                    generationConfig: {
-                        temperature: 0.9,
-                        maxOutputTokens: 8192,
-                    }
-                });
-
-                const result = await model.generateContent(prompt);
-                const response = await result.response;
-                const text = response.text();
-
-                let jsonString = text;
-                if (text.includes('```json')) {
-                    jsonString = text.split('```json')[1].split('```')[0];
-                } else if (text.includes('```')) {
-                    jsonString = text.split('```')[1].split('```')[0];
-                }
-
-                const itinerary = JSON.parse(jsonString.trim());
-                console.log('✅ Gemini AI generated itinerary');
-
-                return {
-                    success: true,
-                    itinerary
-                };
-            }
-        }
-
-        throw new Error('No API keys configured or all API calls failed');
-    } catch (error) {
-        console.error('❌ API Error:', error.message);
+        const itinerary = JSON.parse(jsonString.trim());
+        console.log('✅ Gemini AI successfully generated itinerary for:', tripDetails.destination);
 
         return {
+            success: true,
+            source: 'gemini',
+            itinerary
+        };
+    } catch (geminiError) {
+        console.error('❌ Gemini API Error:', geminiError.message);
+
+        // ===== TIER 2: Try OpenRouter API (free models) =====
+        try {
+            console.log('🔄 Gemini failed, trying OpenRouter free models...');
+            const openRouterResult = await generateViaOpenRouter(prompt);
+
+            if (openRouterResult.success) {
+                console.log(`✅ OpenRouter fallback succeeded via model: ${openRouterResult.model}`);
+                return {
+                    success: true,
+                    source: 'openrouter',
+                    model: openRouterResult.model,
+                    itinerary: openRouterResult.itinerary
+                };
+            }
+
+            console.warn('⚠️ OpenRouter also failed:', openRouterResult.error);
+        } catch (openRouterError) {
+            console.error('❌ OpenRouter Error:', openRouterError.message);
+        }
+
+        // ===== TIER 3: Static fallback template =====
+        console.log('📋 All AI providers failed. Using static fallback template.');
+        return {
             success: false,
-            error: error.message,
+            source: 'fallback',
+            error: geminiError.message,
             fallback: generateDetailedFallback(tripDetails, days)
         };
     }
@@ -311,48 +331,6 @@ const generateDetailedFallback = (tripDetails, days) => {
                 { name: 'La Laguna Beach Club', cuisine: 'Mediterranean', cost: 40, description: 'Bohemian beach club with swings and sunset views.' }
             ],
             tips: ['Rent a scooter ($5/day) or hire a driver ($40/day)', 'Bargain at markets - start at 50% of asking', 'Cover shoulders/knees at temples', 'Avoid tap water', 'Best dry season is April-October']
-        },
-        london: {
-            country: 'United Kingdom',
-            currency: '£',
-            attractions: [
-                { name: 'Tower of London & Crown Jewels', category: 'culture', cost: 30, duration: '3 hours', description: 'Medieval fortress housing the Crown Jewels. Book the first Beefeater tour at 10 AM for the best experience and fewer crowds.', coords: { lat: 51.5081, lng: -0.0759 } },
-                { name: 'Big Ben & Westminster Abbey', category: 'sightseeing', cost: 25, duration: '2.5 hours', description: 'Iconic clock tower and Gothic abbey where royals are crowned. Best photo spot is from Westminster Bridge at golden hour.', coords: { lat: 51.4994, lng: -0.1248 } },
-                { name: 'British Museum', category: 'culture', cost: 0, duration: '4 hours', description: 'World-class museum with Rosetta Stone and Parthenon sculptures. Free entry - grab a map and prioritize Egyptian and Greek galleries.', coords: { lat: 51.5194, lng: -0.1270 } },
-                { name: 'Borough Market Food Tour', category: 'food', cost: 40, duration: '2.5 hours', description: 'London\'s oldest food market since 1014. Must-try: Bread Ahead doughnuts, Padella fresh pasta, and Kappacasein raclette.', coords: { lat: 51.5055, lng: -0.0910 } },
-                { name: 'Buckingham Palace & Changing of the Guard', category: 'sightseeing', cost: 0, duration: '1.5 hours', description: 'Royal residence with the famous guard ceremony at 11 AM (Mon, Wed, Fri, Sun). Arrive 30 mins early for front-row view.', coords: { lat: 51.5014, lng: -0.1419 } },
-                { name: 'Camden Market & Street Art', category: 'shopping', cost: 20, duration: '3 hours', description: 'Eclectic market with vintage fashion, street food, and live music. Don\'t miss the famous Lock Market and Cyberdog store.', coords: { lat: 51.5416, lng: -0.1458 } },
-                { name: 'Sky Garden Sunset Views', category: 'sightseeing', cost: 0, duration: '1.5 hours', description: 'Free 360° London views from the 35th floor. Book online 3 weeks ahead - includes gardens, bar, and stunning cityscape.', coords: { lat: 51.5113, lng: -0.0836 } },
-                { name: 'West End Theatre Show', category: 'entertainment', cost: 60, duration: '3 hours', description: 'World-famous theatre district. Book Hamilton, Les Misérables, or The Phantom of the Opera for an unforgettable evening.', coords: { lat: 51.5117, lng: -0.1275 } }
-            ],
-            restaurants: [
-                { name: 'Dishoom King\'s Cross', cuisine: 'Indian', cost: 25, description: 'Bombay-style café with legendary bacon naan and black daal. Worth the queue.' },
-                { name: 'The Breakfast Club', cuisine: 'Brunch', cost: 18, description: 'London\'s favorite all-day breakfast. Try the Full Monty or Pancake Stack.' },
-                { name: 'Duck & Waffle', cuisine: 'British', cost: 45, description: '24/7 dining on the 40th floor with the signature duck and waffle dish.' },
-                { name: 'Flat Iron Steak', cuisine: 'Steakhouse', cost: 15, description: 'Quality steak for just £15. Includes cleaver cocktail and salted caramel dessert.' }
-            ],
-            tips: ['Get an Oyster card for cheaper tube travel', 'Many museums are free - British, Natural History, V&A', 'Right side for standing on escalators', 'Uber is often cheaper than black cabs', 'Book theatre tickets on TodayTix for discounts', 'Pubs close at 11 PM on weekdays']
-        },
-        newyork: {
-            country: 'USA',
-            currency: '$',
-            attractions: [
-                { name: 'Statue of Liberty & Ellis Island', category: 'sightseeing', cost: 24, duration: '4 hours', description: 'Book Crown access 3 months ahead. First ferry at 8:30 AM from Battery Park avoids crowds.', coords: { lat: 40.6892, lng: -74.0445 } },
-                { name: 'Central Park Highlights Walk', category: 'nature', cost: 0, duration: '3 hours', description: 'See Bethesda Fountain, Bow Bridge, Strawberry Fields, and the Reservoir. Rent a bike for $15/hour.', coords: { lat: 40.7829, lng: -73.9654 } },
-                { name: 'Top of the Rock Observation Deck', category: 'sightseeing', cost: 40, duration: '1.5 hours', description: 'Best NYC views including Empire State Building. Sunset tickets sell out - book online.', coords: { lat: 40.7587, lng: -73.9787 } },
-                { name: 'Times Square & Broadway Show', category: 'entertainment', cost: 75, duration: '4 hours', description: 'The crossroads of the world. TKTS booth sells same-day Broadway tickets at 50% off.', coords: { lat: 40.7580, lng: -73.9855 } },
-                { name: '9/11 Memorial & Museum', category: 'culture', cost: 26, duration: '3 hours', description: 'Moving tribute with reflecting pools. Museum is powerful - allow emotional time.', coords: { lat: 40.7115, lng: -74.0134 } },
-                { name: 'Brooklyn Bridge Walk & DUMBO', category: 'sightseeing', cost: 0, duration: '2.5 hours', description: 'Walk from Manhattan to Brooklyn for iconic photos. End at Juliana\'s Pizza.', coords: { lat: 40.7061, lng: -73.9969 } },
-                { name: 'Chelsea Market & High Line', category: 'food', cost: 35, duration: '3 hours', description: 'Food hall in old Nabisco factory, then elevated park walk with art installations.', coords: { lat: 40.7424, lng: -74.0061 } },
-                { name: 'MoMA (Museum of Modern Art)', category: 'culture', cost: 25, duration: '3 hours', description: 'Van Gogh\'s Starry Night, Warhol, Picasso. Free Fridays 4-8 PM (book online).', coords: { lat: 40.7614, lng: -73.9776 } }
-            ],
-            restaurants: [
-                { name: 'Katz\'s Delicatessen', cuisine: 'Deli', cost: 25, description: 'Legendary pastrami since 1888. Cash only. "I\'ll have what she\'s having" scene filmed here.' },
-                { name: 'Joe\'s Pizza Greenwich Village', cuisine: 'Pizza', cost: 5, description: 'Best $5 slice in NYC. Spider-Man\'s pizza spot.' },
-                { name: 'The Smith', cuisine: 'American', cost: 35, description: 'Upscale casual brunch with ricotta pancakes.' },
-                { name: 'Shake Shack Madison Square Park', cuisine: 'Burgers', cost: 15, description: 'The original location. ShackBurger and concrete custard are must-tries.' }
-            ],
-            tips: ['Subway is 24/7 but skip express trains for first visit', 'Walk - Manhattan is smaller than it looks', 'Tip 18-20% at restaurants', 'Skip Olive Garden in Times Square', 'MTA app for real-time subway times', 'SoHo for shopping, Williamsburg for hipster vibes']
         }
     };
 
@@ -396,10 +374,6 @@ const generateDetailedFallback = (tripDetails, days) => {
         data = destinationData.bali;
     } else if (normalizedDest.includes('tokyo') || normalizedDest.includes('japan')) {
         data = destinationData.tokyo;
-    } else if (normalizedDest.includes('london') || normalizedDest.includes('uk') || normalizedDest.includes('england')) {
-        data = destinationData.london;
-    } else if (normalizedDest.includes('new york') || normalizedDest.includes('nyc') || normalizedDest.includes('manhattan')) {
-        data = destinationData.newyork;
     } else {
         // Use generic data with the user's actual destination name
         data = genericData;

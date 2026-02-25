@@ -41,10 +41,13 @@ router.post('/generate', protect, async (req, res) => {
             accommodation
         });
 
+        const aiSource = aiResult.source || 'unknown';
         console.log('📊 AI Result:', {
             success: aiResult.success,
+            source: aiSource,
             hasItinerary: !!aiResult.itinerary,
             hasFallback: !!aiResult.fallback,
+            model: aiResult.model || 'N/A',
             error: aiResult.error || 'none'
         });
 
@@ -88,12 +91,18 @@ router.post('/generate', protect, async (req, res) => {
             resultCount: 1
         });
 
+        // Build response message based on AI source
+        const sourceMessages = {
+            gemini: 'AI-generated itinerary created successfully (via Gemini)',
+            openrouter: `AI-generated itinerary created successfully (via OpenRouter: ${aiResult.model || 'free model'})`,
+            fallback: 'Static fallback itinerary created (all AI providers unavailable)',
+        };
+
         res.status(201).json({
             success: true,
             aiGenerated: aiResult.success,
-            message: aiResult.success
-                ? 'AI-generated itinerary created successfully'
-                : 'Fallback itinerary created (add Gemini API key for AI features)',
+            aiSource: aiSource,
+            message: sourceMessages[aiSource] || 'Itinerary created',
             trip: {
                 id: trip._id,
                 destination: trip.destination,
